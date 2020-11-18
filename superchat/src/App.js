@@ -8,6 +8,13 @@ import "firebase/analytics";
 
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useCollectionData } from "react-firebase-hooks/firestore";
+import NodeRSA from "node-rsa";
+
+// * Public Key Encryption
+const key = new NodeRSA().generateKeyPair();
+// ! Public and Private Keys
+const publicK = key.exportKey("public");
+const privateK = key.exportKey("private");
 
 if (!firebase.apps.length) {
   firebase.initializeApp({
@@ -80,10 +87,18 @@ function ChatRoom() {
 
     const { uid, photoURL } = auth.currentUser;
 
+    // * Encrypt msg
+    const privateKey = new NodeRSA();
+    privateKey.importKey(privateK);
+
+    const encryptedMsg = privateKey.encryptPrivate(formValue, "base64");
+
+    // * Send message request
     await messagesRef.add({
-      text: formValue,
+      text: encryptedMsg,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       uid,
+      public_key: publicK,
       photoURL,
     });
 
@@ -115,21 +130,36 @@ function ChatRoom() {
   );
 }
 
+const decryptText = ({ text, public_key }) => {
+  const publicKey = new NodeRSA();
+  publicKey.importKey(public_key);
+  try {
+    const decrypted = publicKey.decryptPublic(text, "utf8");
+    return decrypted;
+  } catch {
+    return null;
+  }
+};
+
 function ChatMessage(props) {
-  const { text, uid, photoURL } = props.message;
+  const { text, uid, photoURL, public_key } = props.message;
+
+  const chatText = public_key ? decryptText({ text, public_key }) : text;
 
   const messageClass = uid === auth.currentUser.uid ? "sent" : "received";
 
+  const errorClass = chatText ? "" : "error";
+
   return (
     <>
-      <div className={`message ${messageClass}`}>
+      <div className={`message ${messageClass} ${errorClass}`}>
         <img
           src={
             photoURL || "https://api.adorable.io/avatars/23/abott@adorable.png"
           }
           alt=""
         />
-        <p>{text}</p>
+        <p>{chatText ? chatText : "El mensaje ha sido corrompido."}</p>
       </div>
     </>
   );

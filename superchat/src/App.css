@@ -147,6 +147,12 @@ p {
   color: black;
 }
 
+.error p {
+  color: #ffffff;
+  background: #ff5d6f;
+  font-style: italic;
+}
+
 img {
   width: 40px;
   height: 40px;
